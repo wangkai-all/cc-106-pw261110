@@ -1,0 +1,7 @@
+h5py>=3.10
+numpy>=1.26
+fastapi>=0.110
+python-multipart>=0.0.9
+uvicorn[standard]>=0.29
+tzdata
+pytest

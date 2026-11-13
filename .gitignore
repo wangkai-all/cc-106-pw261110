@@ -32,3 +32,10 @@ test-results/
 *.sqlite3-shm
 *.sqlite3-journal
 !*.traineddata.gz
+
+# runtime data: uploads and generated sample/database files
+data/uploads/
+data/*.h5
+data/*.hdf5
+data/*.hdf
+.pytest_cache/

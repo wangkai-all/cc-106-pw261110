@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HDF5 测量数据导入</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1>HDF5 测量数据导入</h1>
+  <div class="topbar-actions">
+    <button id="theme-toggle" class="btn btn-ghost" type="button">切换主题</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ============== 左栏：文件与数据集树 ============== -->
+  <section class="panel panel-tree">
+    <div class="panel-head">
+      <h2>测量文件</h2>
+      <label class="btn btn-primary upload-btn">
+        上传 HDF5
+        <input id="file-input" type="file" accept=".h5,.hdf5,.hdf" hidden />
+      </label>
+    </div>
+    <p class="hint">也可用 <code>backend/scripts/make_sample.py</code> 生成的样本文件体验。</p>
+    <div id="file-list" class="file-list"></div>
+    <div id="tree" class="tree" aria-label="HDF5 组与数据集树"></div>
+  </section>
+
+  <!-- ============== 中栏：数据集详情 / 预览 / 导入 ============== -->
+  <section class="panel panel-main">
+    <div id="dataset-empty" class="empty-state">
+      <p>从左侧选择一个数据集开始。</p>
+    </div>
+
+    <div id="dataset-detail" hidden>
+      <div class="ds-header">
+        <h2 id="ds-title"></h2>
+        <span id="ds-status" class="badge"></span>
+      </div>
+      <dl id="ds-meta" class="meta-grid"></dl>
+      <div id="ds-issues" class="issues" hidden></div>
+
+      <h3>属性</h3>
+      <div id="ds-attrs" class="attrs"></div>
+
+      <!-- 时间方式配置 -->
+      <h3>时间轴配置</h3>
+      <div class="form-grid">
+        <label>时间方式
+          <select id="time-mode">
+            <option value="array">独立时间数组</option>
+            <option value="sampled">起始时间 + 采样间隔推算</option>
+          </select>
+        </label>
+        <label id="label-array-path">时间数组路径
+          <select id="time-array-path"></select>
+        </label>
+        <label id="label-start" hidden>起始时间
+          <input id="time-start" type="number" step="any" />
+        </label>
+        <label id="label-interval" hidden>采样间隔
+          <input id="time-interval" type="number" step="any" min="0" />
+        </label>
+        <label>时间单位
+          <select id="time-unit">
+            <option value="ns">纳秒 ns</option>
+            <option value="us">微秒 us</option>
+            <option value="ms">毫秒 ms</option>
+            <option value="s" selected>秒 s</option>
+            <option value="min">分钟 min</option>
+            <option value="h">小时 h</option>
+            <option value="d">天 d</option>
+          </select>
+        </label>
+        <label>时区
+          <input id="time-tz" type="text" placeholder="如 Asia/Shanghai 或 +08:00" />
+        </label>
+        <label>缺失值标记（留空用文件属性）
+          <input id="fill-value" type="number" step="any" placeholder="自动检测 _FillValue 等" />
+        </label>
+        <label class="checkbox">
+          <input id="use-scale" type="checkbox" checked />
+          应用 scale_factor / add_offset
+        </label>
+      </div>
+      <div class="row-actions">
+        <button id="btn-validate" class="btn" type="button">校验数据集</button>
+        <span id="validate-msg" class="inline-msg"></span>
+      </div>
+
+      <!-- 通道与范围 -->
+      <h3>通道与时间段</h3>
+      <div id="channel-picker" class="channel-picker"></div>
+      <div class="form-grid">
+        <label>起始下标
+          <input id="range-start" type="number" min="0" value="0" />
+        </label>
+        <label>结束下标（不含）
+          <input id="range-stop" type="number" min="1" />
+        </label>
+        <label>最大预览点数
+          <input id="max-points" type="number" min="50" max="5000" value="1500" />
+        </label>
+      </div>
+      <div class="row-actions">
+        <button id="btn-preview" class="btn btn-primary" type="button">预览曲线</button>
+        <button id="btn-import" class="btn" type="button">导入选中切片</button>
+        <span id="import-msg" class="inline-msg"></span>
+      </div>
+
+      <h3>曲线预览 <span id="preview-meta" class="hint"></span></h3>
+      <div id="chart-wrap" class="chart-wrap">
+        <canvas id="chart" height="340"></canvas>
+        <div id="tooltip" class="tooltip" hidden></div>
+      </div>
+      <div id="legend" class="legend"></div>
+
+      <h3>导入任务与配置版本</h3>
+      <div id="jobs"></div>
+    </div>
+  </section>
+
+  <!-- ============== 右栏：统一测量表 ============== -->
+  <section class="panel panel-table">
+    <div class="panel-head">
+      <h2>统一测量表</h2>
+      <button id="btn-refresh-readings" class="btn btn-ghost" type="button">刷新</button>
+    </div>
+    <p class="hint" id="readings-count"></p>
+    <div class="table-scroll">
+      <table id="readings-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>时间 (UTC)</th><th>通道</th><th>下标</th>
+            <th>值</th><th>缺失</th><th>配置版本</th><th>来源</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+
+<!-- 读数溯源详情弹窗 -->
+<div id="reading-modal" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <h3 id="modal-title">读数溯源</h3>
+      <button id="modal-close" class="btn btn-ghost" type="button">✕</button>
+    </div>
+    <dl id="modal-body" class="modal-grid"></dl>
+  </div>
+</div>
+</body>
+</html>
